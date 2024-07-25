@@ -1,5 +1,6 @@
 #pragma once
 
+#include <shared_mutex>
 #include <unordered_map>
 
 #include "concurrency/transaction.h"
@@ -24,6 +25,7 @@ class Watermark {
   auto UpdateCommitTs(timestamp_t commit_ts) { commit_ts_ = commit_ts; }
 
   auto GetWatermark() -> timestamp_t {
+    std::shared_lock<std::shared_mutex> lock(latch_);
     if (current_reads_.empty()) {
       return commit_ts_;
     }
@@ -34,6 +36,7 @@ class Watermark {
 
   timestamp_t watermark_;
 
+  std::shared_mutex latch_;
   std::unordered_map<timestamp_t, int> current_reads_;
 };
 

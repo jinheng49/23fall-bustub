@@ -1,10 +1,14 @@
 #include "execution/execution_common.h"
+#include <_types/_uint32_t.h>
+#include <vector>
 #include "catalog/catalog.h"
+#include "catalog/schema.h"
 #include "common/config.h"
 #include "common/macros.h"
 #include "concurrency/transaction_manager.h"
 #include "fmt/core.h"
 #include "storage/table/table_heap.h"
+#include "storage/table/tuple.h"
 #include "type/value.h"
 #include "type/value_factory.h"
 
@@ -12,7 +16,36 @@ namespace bustub {
 
 auto ReconstructTuple(const Schema *schema, const Tuple &base_tuple, const TupleMeta &base_meta,
                       const std::vector<UndoLog> &undo_logs) -> std::optional<Tuple> {
-  UNIMPLEMENTED("not implemented");
+  // UNIMPLEMENTED("not implemented");
+  if(base_meta.is_deleted_ && undo_logs.empty()){
+    return std::nullopt;
+  }
+  Tuple res_tuple = base_tuple;
+  bool is_deleted = false;
+  for(const auto &undo_log : undo_logs){
+    if(undo_log.is_deleted_){
+      is_deleted = true;
+    }else{
+      is_deleted = false;
+      Schema undo_schema = GetUndoLogSchema(undo_log,schema);
+      std::vector<Value> values;
+      uint32_t tuple_sz = schema->GetColumnCount();
+      values.reserve(tuple_sz);
+      for(uint32_t i = 0,j = 0; i < tuple_sz; i++){
+        if(undo_log.modified_fields_[i]){
+          values.push_back(undo_log.tuple_.GetValue(&undo_schema,j++));
+        }else{
+          values.push_back(res_tuple.GetValue(schema, i)) ;
+        }
+      }
+      res_tuple = Tuple(std::move(values), schema);
+    }
+  }
+  if(is_deleted){
+    return std::nullopt;
+  }
+  return res_tuple;
+
 }
 
 void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const TableInfo *table_info,
@@ -42,3 +75,15 @@ void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const Table
 }
 
 }  // namespace bustub
+
+auto GetUndoLogSchema(const bustub::UndoLog &undo_log, const bustub::Schema *schema) {
+  // UNIMPLEMENTED("not implemented");
+  std::vector<uint32_t> cols;
+  uint32_t tuple_sz = schema->GetColumnCount();
+  for(uint32_t i = 0; i < tuple_sz; i++){
+    if(undo_log.modified_fields_[i]){
+      cols.push_back(i);
+    }
+  }
+  return bustub::Schema::CopySchema(schema, cols);
+}

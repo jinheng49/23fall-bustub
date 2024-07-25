@@ -1,5 +1,6 @@
 #pragma once
 
+#include <__utility/pair.h>
 #include <string>
 #include <vector>
 
@@ -15,6 +16,8 @@ auto ReconstructTuple(const Schema *schema, const Tuple &base_tuple, const Tuple
 
 void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const TableInfo *table_info,
                TableHeap *table_heap);
+
+auto GetUndoLogSchema(const UndoLog &undo_log, const Schema *schema) -> Schema;
 
 // Add new functions as needed... You are likely need to define some more functions.
 //
