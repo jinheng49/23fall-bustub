@@ -12,8 +12,10 @@
 
 #pragma once
 
+#include <memory>
 #include <vector>
 
+#include "concurrency/transaction.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/seq_scan_plan.h"
@@ -53,9 +55,13 @@ class SeqScanExecutor : public AbstractExecutor {
  private:
   /** The sequential scan plan node to be executed */
   const SeqScanPlanNode *plan_;
-  TableHeap *table_heap_{nullptr};
-  // TableIterator* iter_;
-  std::vector<RID> rids_;
-  std::vector<RID>::iterator rid_iter_;
+  TableInfo *table_info_;
+  Transaction *txn_;
+  TransactionManager *txn_mgr_;
+  std::unique_ptr<TableIterator> table_iter_;
+  // TableHeap *table_heap_{nullptr};
+  // TableIterator* iter_;s
+  // std::vector<RID> rids_;
+  // std::vector<RID>::iterator rid_iter_;
 };
 }  // namespace bustub
