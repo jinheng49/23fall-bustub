@@ -15,6 +15,8 @@
 #include <memory>
 #include <utility>
 
+#include "concurrency/transaction.h"
+#include "concurrency/transaction_manager.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/insert_plan.h"
@@ -59,6 +61,8 @@ class InsertExecutor : public AbstractExecutor {
   const InsertPlanNode *plan_;
   std::unique_ptr<AbstractExecutor> child_executor_;
   bool has_inserted_;
+  Transaction *txn_;
+  TransactionManager *txn_mgr_;
 };
 
 }  // namespace bustub
