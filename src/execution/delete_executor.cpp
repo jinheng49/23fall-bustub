@@ -11,10 +11,12 @@
 //===----------------------------------------------------------------------===//
 
 #include <memory>
+#include <optional>
+#include <queue>
+#include <vector>
 
-#include "concurrency/transaction.h"
+#include "execution/execution_common.h"
 #include "execution/executors/delete_executor.h"
-#include "storage/table/tuple.h"
 
 namespace bustub {
 
@@ -24,33 +26,48 @@ DeleteExecutor::DeleteExecutor(ExecutorContext *exec_ctx, const DeletePlanNode *
 
 void DeleteExecutor::Init() {
   // throw NotImplementedException("DeleteExecutor is not implemented");
-  this->child_executor_->Init();
-  this->has_deleted_ = false;
+  child_executor_->Init();
+  is_called_ = false;
+
+  txn_mgr_ = exec_ctx_->GetTransactionManager();
+  txn_ = exec_ctx_->GetTransaction();
+  Tuple old_tuple{};
+  RID rid;
+  while (child_executor_->Next(&old_tuple, &rid)) {
+    buffer_.push({rid, old_tuple});
+  }
 }
 
-auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
-  if (has_deleted_) {
-    return false;
+auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
+  Tuple delete_tuple{};
+  RID temp_rid;
+  int delete_num = 0;
+  Catalog *catalog = exec_ctx_->GetCatalog();
+  TableInfo *table_info = catalog->GetTable(plan_->GetTableOid());
+  std::vector<IndexInfo *> indexes = catalog->GetTableIndexes(table_info->name_);
+  // origin tuple schema
+  Schema schema = child_executor_->GetOutputSchema();
+  while (!buffer_.empty()) {
+    auto tuple_pair = buffer_.front();
+    delete_tuple = std::move(tuple_pair.second);
+    temp_rid = tuple_pair.first;
+    TupleMeta old_tuple_meta = table_info->table_->GetTupleMeta(temp_rid);
+    buffer_.pop();
+
+    DeleteTuple(table_info, &schema, txn_mgr_, txn_, old_tuple_meta, delete_tuple, temp_rid);
+
+    ++delete_num;
   }
-  this->has_deleted_ = true;
-  int count = 0;
-  Tuple child_tuple{};
-  RID child_rid{};
-  auto table_info = this->exec_ctx_->GetCatalog()->GetTable(this->plan_->GetTableOid());
-  auto indexes = this->exec_ctx_->GetCatalog()->GetTableIndexes(table_info->name_);
-  while (this->child_executor_->Next(&child_tuple, &child_rid)) {
-    count++;
-    table_info->table_->UpdateTupleMeta(TupleMeta{0, true}, child_rid);
-    for (auto &index_info : indexes) {
-      auto index = index_info->index_.get();
-      auto key_attrs = index_info->index_->GetKeyAttrs();
-      auto key = child_tuple.KeyFromTuple(table_info->schema_, *index->GetKeySchema(), key_attrs);
-      index->DeleteEntry(key, child_rid, this->exec_ctx_->GetTransaction());
-    }
+  std::vector<Value> values;
+  values.reserve(GetOutputSchema().GetColumnCount());
+  values.emplace_back(TypeId::INTEGER, delete_num);
+  *tuple = Tuple(values, &GetOutputSchema());
+  if (delete_num == 0 && !is_called_) {
+    is_called_ = true;
+    return true;
   }
-  std::vector<Value> result = {{TypeId::INTEGER, count}};
-  *tuple = Tuple(result, &GetOutputSchema());
-  return true;
+  is_called_ = true;
+  return delete_num != 0;
 }
 
 }  // namespace bustub

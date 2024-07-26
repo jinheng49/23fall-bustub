@@ -13,9 +13,12 @@
 #pragma once
 
 #include <memory>
+#include <queue>
 #include <utility>
 #include <vector>
 
+#include "concurrency/transaction.h"
+#include "concurrency/transaction_manager.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/delete_plan.h"
@@ -61,6 +64,10 @@ class DeleteExecutor : public AbstractExecutor {
 
   /** The child executor from which RIDs for deleted tuples are pulled */
   std::unique_ptr<AbstractExecutor> child_executor_;
-  bool has_deleted_;
+  bool is_called_;
+  Transaction *txn_;
+  TransactionManager *txn_mgr_;
+  std::queue<std::pair<RID, Tuple>> buffer_;
+
 };
 }  // namespace bustub

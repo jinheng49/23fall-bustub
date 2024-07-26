@@ -16,6 +16,8 @@
 #include <utility>
 #include <vector>
 
+#include "concurrency/transaction.h"
+#include "concurrency/transaction_manager.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/update_plan.h"
@@ -66,6 +68,9 @@ class UpdateExecutor : public AbstractExecutor {
 
   /** The child executor to obtain value from */
   std::unique_ptr<AbstractExecutor> child_executor_;
-  bool has_inserted_;
+  bool is_called_;
+  Transaction *txn_;
+  TransactionManager *txn_mgr_;
+  std::list<std::pair<RID, Tuple>> buffer_;
 };
 }  // namespace bustub

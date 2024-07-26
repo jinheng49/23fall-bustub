@@ -66,7 +66,12 @@ auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   }
   std::vector<Value> result = {{TypeId::INTEGER, count}};
   *tuple = Tuple(result, &GetOutputSchema());
-  return true;
+  if(count == 0 && !has_inserted_){
+    has_inserted_ = true;
+    return true;
+  }
+  has_inserted_ = true;
+  return count != 0;
 }
 
 }  // namespace bustub
