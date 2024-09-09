@@ -9,7 +9,7 @@
 // Copyright (c) 2015-2021, Carnegie Mellon University Database Group
 //
 //===----------------------------------------------------------------------===//
-#include <_types/_uint32_t.h>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -23,7 +23,6 @@
 #include "execution/execution_common.h"
 #include "execution/executors/update_executor.h"
 #include "execution/expressions/column_value_expression.h"
-#include "execution/expressions/constant_value_expression.h"
 #include "storage/index/index_iterator.h"
 #include "storage/table/tuple.h"
 #include "type/value.h"
@@ -47,7 +46,7 @@ void UpdateExecutor::Init() {
   Tuple old_tuple{};
   RID rid{};
   while (child_executor_->Next(&old_tuple, &rid)) {
-    if(rid.GetPageId() != INVALID_PAGE_ID){
+    if (rid.GetPageId() != INVALID_PAGE_ID) {
       buffer_.emplace_back(rid, old_tuple);
     }
   }
@@ -64,55 +63,55 @@ auto UpdateExecutor::Next(Tuple *tuple, RID *rid) -> bool {
 
   const Schema *schema = &child_executor_->GetOutputSchema();
   uint32_t key_idx = 0;
-  if(primary_key_idx_info != nullptr){
+  if (primary_key_idx_info != nullptr) {
     key_idx = primary_key_idx_info->index_->GetKeyAttrs().front();
   }
   const auto *cons_expr = dynamic_cast<const ColumnValueExpression *>(plan_->target_expressions_[key_idx].get());
-  if(primary_key_idx_info != nullptr && cons_expr == nullptr){
-    for(const auto &tuple_pair : buffer_){
+  if (primary_key_idx_info != nullptr && cons_expr == nullptr) {
+    for (const auto &tuple_pair : buffer_) {
       temp_rid = tuple_pair.first;
       old_tuple = tuple_pair.second;
       old_tuple_meta = table_info_->table_->GetTupleMeta(temp_rid);
       DeleteTuple(table_info_, schema, txn_mgr_, txn_, old_tuple_meta, old_tuple, temp_rid);
     }
     std::vector<Value> values;
-    while(!buffer_.empty()){
+    while (!buffer_.empty()) {
       values.clear();
       auto tuple_pair = buffer_.front();
       temp_rid = tuple_pair.first;
       old_tuple = tuple_pair.second;
       old_tuple_meta = table_info_->table_->GetTupleMeta(temp_rid);
       buffer_.pop_front();
-      for(const auto &expr : plan_->target_expressions_){
+      for (const auto &expr : plan_->target_expressions_) {
         values.push_back(expr->Evaluate(&old_tuple, *schema));
       }
-      Tuple new_tuple(values,schema);
-      InsertTuple(primary_key_idx_info, table_info_,txn_mgr_, txn_, exec_ctx_->GetLockManager(),new_tuple,schema);
+      Tuple new_tuple(values, schema);
+      InsertTuple(primary_key_idx_info, table_info_, txn_mgr_, txn_, exec_ctx_->GetLockManager(), new_tuple, schema);
       txn_->AppendWriteSet(table_info_->oid_, temp_rid);
       ++update_num;
     }
-  }else{
-    const TupleMeta new_tuple_meta = TupleMeta{txn_->GetTransactionTempTs(),false};
+  } else {
+    const TupleMeta new_tuple_meta = TupleMeta{txn_->GetTransactionTempTs(), false};
     std::vector<Value> values;
-    while(!buffer_.empty()){
+    while (!buffer_.empty()) {
       values.clear();
       auto tuple_pair = buffer_.front();
       temp_rid = tuple_pair.first;
       old_tuple = std::move(tuple_pair.second);
       buffer_.pop_front();
-      //update column values accroding to update expressions
-      for(const auto &expr : plan_->target_expressions_){
+      // update column values accroding to update expressions
+      for (const auto &expr : plan_->target_expressions_) {
         values.push_back(expr->Evaluate(&old_tuple, *schema));
       }
-      Tuple new_tuple(values,schema);
+      Tuple new_tuple(values, schema);
       old_tuple_meta = table_info_->table_->GetTupleMeta(temp_rid);
 
-      if(old_tuple_meta.ts_ == txn_->GetTransactionTempTs()){
+      if (old_tuple_meta.ts_ == txn_->GetTransactionTempTs()) {
         std::optional<UndoLink> undo_link_optional = txn_mgr_->GetUndoLink(temp_rid);
         if (undo_link_optional.has_value() && undo_link_optional->IsValid()) {
           UndoLog temp_undo_log = GenerateDiffLog(old_tuple, old_tuple_meta, new_tuple, new_tuple_meta, schema);
           auto temp = txn_mgr_->GetUndoLogOptional(undo_link_optional.value());
-          if(!temp.has_value()){
+          if (!temp.has_value()) {
             throw Exception("Invalid UndoLink");
           }
           UndoLog old_undo_log = temp.value();
@@ -120,10 +119,10 @@ auto UpdateExecutor::Next(Tuple *tuple, RID *rid) -> bool {
           UndoLog merged_undo_log = MergeUndoLog(temp_undo_log, old_undo_log, schema);
           txn_->ModifyUndoLog(undo_link_optional.value().prev_log_idx_, merged_undo_log);
         }
-      }else{
+      } else {
         LockAndCheck(temp_rid, txn_mgr_, txn_, table_info_);
         std::optional<UndoLink> undo_link_optional = txn_mgr_->GetUndoLink(temp_rid);
-        if(!undo_link_optional.has_value()){
+        if (!undo_link_optional.has_value()) {
           throw Exception("Invalid UndoLink");
         }
         UndoLog temp_undo_log = GenerateDiffLog(old_tuple, old_tuple_meta, new_tuple, new_tuple_meta, schema);
@@ -148,7 +147,6 @@ auto UpdateExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   }
   is_called_ = true;
   return update_num != 0;
-
 }
 
 }  // namespace bustub

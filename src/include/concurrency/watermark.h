@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <shared_mutex>
 #include <unordered_map>
 
@@ -37,7 +38,7 @@ class Watermark {
   timestamp_t watermark_;
 
   std::shared_mutex latch_;
-  std::unordered_map<timestamp_t, int> current_reads_;
+  std::map<timestamp_t, int> current_reads_;
 };
 
 };  // namespace bustub

@@ -14,12 +14,11 @@
 #include <optional>
 #include <utility>
 
+#include "catalog/catalog.h"
 #include "common/exception.h"
 #include "execution/execution_common.h"
-#include "catalog/catalog.h"
 #include "execution/executors/insert_executor.h"
 #include "storage/table/tuple.h"
-
 
 namespace bustub {
 
@@ -39,34 +38,30 @@ void InsertExecutor::Init() {
 }
 
 auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
-  if (has_inserted_) {
-    return false;
-  }
-  this->has_inserted_ = true;
   int count = 0;
   auto table_info = this->exec_ctx_->GetCatalog()->GetTable(this->plan_->GetTableOid());
   auto schema = table_info->schema_;
   auto indexes = this->exec_ctx_->GetCatalog()->GetTableIndexes(table_info->name_);
-  IndexInfo *primary_key_idx_info = indexes.empty()? nullptr : indexes[0];
+  IndexInfo *primary_key_idx_info = indexes.empty() ? nullptr : indexes[0];
   Tuple child_tuple{};
-  while (this->child_executor_->Next(tuple, rid)) {
-    count++;
+  while (this->child_executor_->Next(&child_tuple, rid)) {
     if (primary_key_idx_info == nullptr) {
       auto rid_optional = table_info->table_->InsertTuple(TupleMeta{txn_->GetTransactionTempTs(), false}, child_tuple,
                                                           exec_ctx_->GetLockManager(), txn_, plan_->GetTableOid());
-      if(!rid_optional.has_value()){
+      if (!rid_optional.has_value()) {
         throw Exception("Invalid rid");
-      }                                               
+      }
       txn_mgr_->UpdateUndoLink(*rid_optional, UndoLink());
       txn_->AppendWriteSet(table_info->oid_, *rid_optional);
     } else {
       InsertTuple(primary_key_idx_info, table_info, txn_mgr_, txn_, exec_ctx_->GetLockManager(), child_tuple,
                   &child_executor_->GetOutputSchema());
     }
+    ++count;
   }
   std::vector<Value> result = {{TypeId::INTEGER, count}};
   *tuple = Tuple(result, &GetOutputSchema());
-  if(count == 0 && !has_inserted_){
+  if (count == 0 && !has_inserted_) {
     has_inserted_ = true;
     return true;
   }

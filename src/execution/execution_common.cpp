@@ -9,6 +9,7 @@
 #include "catalog/catalog.h"
 #include "catalog/schema.h"
 #include "common/config.h"
+#include "common/exception.h"
 #include "common/macros.h"
 #include "concurrency/transaction_manager.h"
 #include "fmt/core.h"
@@ -198,16 +199,6 @@ auto UndoLogTupleString(const UndoLog &undo_log, const Schema *schema) -> std::s
   bool is_first = true;
 
   if (undo_log.is_deleted_) {
-    /*
-    for (uint32_t i = 0; i < schema->GetColumnCount(); ++i) {
-      if (is_first) {
-        is_first = false;
-      } else {
-        os << ", ";
-      }
-      os << "<NULL>";
-    }
-    */
     os << GenerateNullTupleForSchema(&undolog_schema).ToString(&undolog_schema);
   } else {
     os << "(";
@@ -278,7 +269,6 @@ auto GenerateDiffLog(const Tuple &old_tuple, const TupleMeta &old_tuple_meta, co
     undo_log.tuple_ = Tuple(std::move(values), &undo_log_schema);
   }
   return undo_log;
-  // haven't finish prev_version !!!!!!!!
 }
 
 auto IsWriteWriteConflict(const Transaction *txn, const TupleMeta &meta) -> bool {
@@ -392,10 +382,9 @@ void LockAndCheck(RID rid, TransactionManager *txn_mgr, Transaction *txn, const 
   if (IsWriteWriteConflict(txn, table_info->table_->GetTupleMeta(rid))) {
     // txn_mgr->Abort(txn);
     // std::cerr << "    IsWriteWriteConflict failed" << std::endl;
-
     // if has been locked, must unset in_progress before abort
     auto version_link_optional = txn_mgr->GetVersionLink(rid);
-    if(version_link_optional.has_value()){
+    if (version_link_optional.has_value()) {
       txn_mgr->UpdateVersionLink(rid, VersionUndoLink{version_link_optional->prev_, false}, nullptr);
     }
     MyAbort(txn);
@@ -421,20 +410,19 @@ void DeleteTuple(const TableInfo *table_info, const Schema *schema, TransactionM
     if (undo_link_optional.has_value() && undo_link_optional->IsValid()) {
       UndoLog temp_undo_log = GenerateDiffLog(delete_tuple, old_tuple_meta, Tuple{}, new_tuple_meta, schema);
       temp_undo_log.prev_version_ = undo_link_optional.value();
-      // if (undo_log_optional.has_value())
       std::optional<UndoLog> undo_log_optional = txn_mgr->GetUndoLogOptional(undo_link_optional.value());
-      if(undo_log_optional.has_value()){
-        UndoLog merged_undo_log =
-          MergeUndoLog(temp_undo_log, undo_log_optional.value(), schema);
-      txn->ModifyUndoLog(undo_link_optional.value().prev_log_idx_, merged_undo_log);
+      if (!undo_log_optional.has_value()) {
+        throw Exception("!undo_log_optional.has_value()");
       }
+      UndoLog merged_undo_log = MergeUndoLog(temp_undo_log, undo_log_optional.value(), schema);
+      txn->ModifyUndoLog(undo_link_optional.value().prev_log_idx_, merged_undo_log);
     } else {
       // else check and lock first
       LockAndCheck(rid, txn_mgr, txn, table_info);
 
       std::optional<UndoLink> undo_link_optional = txn_mgr->GetUndoLink(rid);
       UndoLog temp_undo_log = GenerateDiffLog(delete_tuple, old_tuple_meta, Tuple{}, new_tuple_meta, schema);
-      if(undo_link_optional.has_value()){
+      if (undo_link_optional.has_value()) {
         temp_undo_log.prev_version_ = undo_link_optional.value();
       }
 
@@ -478,7 +466,7 @@ void InsertTuple(const IndexInfo *primary_key_idx_info, const TableInfo *table_i
         // std::cerr << "a txn enter this condition before GenerateDiffLog()" << std::endl;
         UndoLog temp_undo_log = GenerateDiffLog(target_tuple, target_meta, Tuple{}, new_tuple_meta, output_schema);
         auto version_link_optional = txn_mgr->GetVersionLink(target_rid);
-        if(version_link_optional.has_value()){
+        if (version_link_optional.has_value()) {
           temp_undo_log.prev_version_ = version_link_optional->prev_;
         }
         UndoLink new_undo_link = txn->AppendUndoLog(temp_undo_log);
@@ -495,7 +483,7 @@ void InsertTuple(const IndexInfo *primary_key_idx_info, const TableInfo *table_i
     // because The planner will ensure that the values have the same schema as the table
     // insert into table heap is thread safe
     auto rid_optional = table_info->table_->InsertTuple(new_tuple_meta, child_tuple, lock_mgr, txn, table_info->oid_);
-    if (!rid_optional.has_value()){
+    if (!rid_optional.has_value()) {
       throw Exception("InsertTuple failed");
     }
     // modify primary key index

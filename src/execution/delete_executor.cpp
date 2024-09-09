@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <queue>
 #include <vector>
@@ -38,7 +39,7 @@ void DeleteExecutor::Init() {
   }
 }
 
-auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
+auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   Tuple delete_tuple{};
   RID temp_rid;
   int delete_num = 0;

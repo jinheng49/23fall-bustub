@@ -68,6 +68,5 @@ class DeleteExecutor : public AbstractExecutor {
   Transaction *txn_;
   TransactionManager *txn_mgr_;
   std::queue<std::pair<RID, Tuple>> buffer_;
-
 };
 }  // namespace bustub
